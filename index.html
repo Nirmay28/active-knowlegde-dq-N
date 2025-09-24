@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AcaDeBot</title>
+<style>
+/* Basic theme & layout styles */
+body { font-family: "Times New Roman", serif; margin:0; padding:0; transition: background-color 0.3s,color 0.3s; text-align:center;}
+.light-mode{background:#fff;color:#000;}
+.dark-mode{background:#1e1e1e;color:#f1f1f1;}
+.frame{display:inline-block;margin-top:20px;padding:20px;border-radius:20px;transition:all 0.3s;position:relative;z-index:2;}
+.frame.active{margin-top:10px;padding:10px;border:none;background:none;box-shadow:none;}
+textarea{width:500px;height:200px;font-size:16px;margin-top:20px;padding:10px;border-radius:6px;border:1px solid #ccc;}
+.light-mode textarea{background:#fff;color:#000;}
+.dark-mode textarea{background:#2c2c2c;color:#f1f1f1;border:1px solid #555;}
+button{font-size:16px;margin:10px;padding:10px 20px;cursor:pointer;border:none;border-radius:6px;}
+.light-mode button{background:#f0f0f0;color:#000;}
+.dark-mode button{background:#444;color:#fff;}
+#theme-panel{position:fixed;top:20px;right:20px;background:rgba(0,0,0,0.05);padding:10px;border-radius:8px;font-size:14px;z-index:3;}
+#theme-toggle{margin-top:5px;padding:6px 12px;cursor:pointer;border:none;border-radius:4px;}
+#debate-container{display:flex;justify-content:center;align-items:flex-start;margin-top:20px;gap:20px;display:none;}
+#person-left,#person-right{width:120px;height:250px;background-size:cover;background-position:center;border-radius:10px;}
+#script-box{width:500px;height:300px;border:2px solid gold;border-radius:10px;padding:10px;overflow-y:auto;background:rgba(255,255,255,0.05);color:#000;}
+.dark-mode #script-box{background:rgba(0,0,0,0.3);color:#f1f1f1;}
+#user-opinion-container{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:20px;display:none;}
+#for-against-toggle{padding:6px 12px;cursor:pointer;border-radius:6px;border:1px solid #ccc;height:30px;}
+#user-opinion{width:300px;height:30px;padding:5px 10px;border-radius:6px;border:1px solid #ccc;font-size:14px;}
+.dark-mode #user-opinion{background:#2c2c2c;color:#f1f1f1;border:1px solid #555;}
+#main-frame h1.small{font-size:24px;margin-bottom:10px;}
+</style>
+</head>
+<body class="light-mode">
+
+<!-- Theme -->
+<div id="theme-panel">
+  <div>Theme:</div>
+  <button id="theme-toggle">🌞 Light</button>
+</div>
+
+<div class="frame" id="main-frame">
+  <h1 id="acad-title">AcaDeBot</h1>
+  <textarea id="article" placeholder="Paste your article here..."></textarea><br>
+  <input type="file" id="pdf-upload" accept=".pdf">
+  <div id="pdf-name"></div>
+  <br>
+  <button id="generate-btn">Generate Debate</button>
+</div>
+
+<div id="debate-container">
+  <div id="person-left" style="background-image:url('person1.jpg');"></div>
+  <div id="script-box">Debate will appear here...</div>
+  <div id="person-right" style="background-image:url('person2.jpg');"></div>
+</div>
+
+<div id="user-opinion-container">
+  <input type="text" id="user-opinion" placeholder="Share your opinion...">
+  <button id="for-against-toggle">For</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.102/pdf.min.js"></script>
+<script>
+const pdfUpload = document.getElementById("pdf-upload");
+const textarea = document.getElementById("article");
+const pdfName = document.getElementById("pdf-name");
+const themeToggle = document.getElementById("theme-toggle");
+const body = document.body;
+const generateBtn = document.getElementById("generate-btn");
+const mainFrame = document.getElementById("main-frame");
+const debateContainer = document.getElementById("debate-container");
+const scriptBox = document.getElementById("script-box");
+const forAgainstToggle = document.getElementById("for-against-toggle");
+const acadTitle = document.getElementById("acad-title");
+const userOpinionContainer = document.getElementById("user-opinion-container");
+let currentSide = "For";
+
+// PDF Upload
+pdfUpload.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if(file){
+    pdfName.textContent = `Uploaded: ${file.name}`;
+    const reader = new FileReader();
+    reader.onload = async function(){
+      const typedarray = new Uint8Array(this.result);
+      const pdf = await pdfjsLib.getDocument(typedarray).promise;
+      let textContent = "";
+      for(let i=1;i<=pdf.numPages;i++){
+        const page = await pdf.getPage(i);
+        const text = await page.getTextContent();
+        text.items.forEach(item=>textContent+=item.str+" ");
+        textContent+="\n\n";
+      }
+      textarea.value=textContent;
+    };
+    reader.readAsArrayBuffer(file);
+  }
+});
+
+// Theme Toggle
+themeToggle.addEventListener("click",()=>{
+  if(body.classList.contains("light-mode")){
+    body.classList.remove("light-mode");body.classList.add("dark-mode");themeToggle.textContent="🌙 Dark";
+  }else{
+    body.classList.remove("dark-mode");body.classList.add("light-mode");themeToggle.textContent="🌞 Light";
+  }
+});
+
+// Generate Debate
+generateBtn.addEventListener("click", async () => {
+  const articleText = textarea.value.trim();
+  if(!articleText){ alert("Please paste an article or upload a PDF."); return; }
+
+  pdfUpload.style.display="none"; textarea.style.display="none"; pdfName.style.display="none"; generateBtn.style.display="none";
+  acadTitle.classList.add("small"); mainFrame.classList.add("active");
+  debateContainer.style.display="flex"; userOpinionContainer.style.display="flex";
+
+  scriptBox.textContent = "🤖 Generating debate, please wait...";
+
+  try {
+    const response = await fetch("http://localhost:5000/generate_debate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({article: articleText, side: currentSide})
+    });
+
+    if(!response.body){ scriptBox.textContent="Error: No response from backend."; return; }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+
+    while(true){
+      const {done,value} = await reader.read();
+      if(done) break;
+      fullText += decoder.decode(value,{stream:true});
+      scriptBox.textContent = fullText;
+    }
+
+  }catch(err){ console.error(err); scriptBox.textContent="Error generating debate: "+err; }
+});
+
+// For/Against Toggle
+forAgainstToggle.addEventListener("click", async () => {
+  currentSide = currentSide === "For" ? "Against" : "For";
+  forAgainstToggle.textContent = currentSide;
+  
+  // Regenerate debate with new side
+  scriptBox.textContent = `🤖 Generating ${currentSide} argument...`;
+  const articleText = textarea.value.trim();
+  if(!articleText) return;
+
+  try {
+    const response = await fetch("http://localhost:5000/generate_debate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({article: articleText, side: currentSide})
+    });
+
+    if(!response.body){ scriptBox.textContent="Error: No response from backend."; return; }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+
+    while(true){
+      const {done,value} = await reader.read();
+      if(done) break;
+      fullText += decoder.decode(value,{stream:true});
+      scriptBox.textContent = fullText;
+    }
+
+  }catch(err){ console.error(err); scriptBox.textContent="Error generating debate: "+err; }
+});
+</script>
+</body>
+</html>

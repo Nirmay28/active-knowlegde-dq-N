@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AcaDeBot</title>
+  <style>
+    body { font-family: Arial; text-align: center; padding: 30px; }
+    textarea { width: 500px; height: 200px; }
+    button { padding: 10px 20px; margin-top: 10px; }
+    #script-box { margin-top: 20px; white-space: pre-line; border: 1px solid #ccc; padding: 10px; width: 600px; margin-left: auto; margin-right: auto; }
+  </style>
+</head>
+<body>
+  <h1>AcaDeBot</h1>
+  <textarea id="article" placeholder="Paste your article here..."></textarea><br>
+  <button id="generate-btn">Generate Debate</button>
+
+  <div id="script-box">Debate will appear here...</div>
+
+  <script>
+    const generateBtn = document.getElementById("generate-btn");
+    const textarea = document.getElementById("article");
+    const scriptBox = document.getElementById("script-box");
+
+    generateBtn.addEventListener("click", async () => {
+      const text = textarea.value.trim();
+      if (!text) return alert("Please enter some text!");
+
+      try {
+        const response = await fetch("/debate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, max_points: 10 })
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          return alert(err.error || "Error generating debate");
+        }
+
+        const data = await response.json();
+        let output = "";
+        data.debate.forEach((item, i) => {
+          output += `${i+1}. ${item.point}\n${item.pro}\n${item.con}\n\n`;
+        });
+
+        scriptBox.textContent = output;
+      } catch(err) {
+        console.error(err);
+        alert("Failed to connect to backend");
+      }
+    });
+  </script>
+</body>
+</html>

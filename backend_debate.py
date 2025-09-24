@@ -1,6 +1,5 @@
-# backend_debate.py
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
 import nltk
 from nltk.corpus import stopwords
@@ -28,47 +27,30 @@ app = FastAPI(
 # ------------------------
 class DebateRequest(BaseModel):
     text: str
-    max_points: int = 15   # default 15, can go up to 20 or more
+    max_points: int = 15
 
 class DebateResponse(BaseModel):
     key_points: list[str]
     debate: list[dict]
 
 # ------------------------
-# Determine if a point is debatable
+# Debatable checker
 # ------------------------
 def is_debatable(point: str) -> bool:
-    """
-    Returns True if a point is debatable, False if factual.
-    """
     debatable_keywords = ["should", "might", "complex", "issue", "problem", "benefit", "impact"]
-
-    # Numeric facts are not debatable
     if any(char.isdigit() for char in point):
         return False
-
-    # Debatable if keyword present
     for kw in debatable_keywords:
         if kw in point.lower():
             return True
-
-    # Short noun phrases are usually factual
     if len(point.split()) <= 3:
         return False
-
     return True
 
 # ------------------------
-# Extract Key Points Logic (Improved Readability)
+# Key points extractor
 # ------------------------
 def extract_key_points(text: str, max_points: int = 20):
-    """
-    Extract key points from text with improved readability:
-    - Prioritize nouns & proper nouns
-    - Merge short factual points with surrounding context
-    - Skip stopwords/punctuation
-    - Fallback to full sentence if needed
-    """
     sentences = nltk.sent_tokenize(text)
     key_points = []
 
@@ -83,9 +65,7 @@ def extract_key_points(text: str, max_points: int = 20):
 
         if nouns:
             point = " ".join(nouns)
-            # Improve readability for short factual points
             if len(point.split()) <= 3 and not is_debatable(point):
-                # Grab first 6-8 words from sentence for context
                 point = " ".join(words[:8])
             key_points.append(point)
         else:
@@ -93,7 +73,7 @@ def extract_key_points(text: str, max_points: int = 20):
             if trimmed:
                 key_points.append(trimmed)
 
-    # Remove duplicates while keeping order
+    # Remove duplicates
     seen = set()
     unique_points = []
     for point in key_points:
@@ -104,7 +84,7 @@ def extract_key_points(text: str, max_points: int = 20):
     return unique_points[:max_points] if unique_points else ["General discussion point"]
 
 # ------------------------
-# Debate Generator
+# Debate generator
 # ------------------------
 def debate_on_points(points):
     debate = []
@@ -120,19 +100,16 @@ def debate_on_points(points):
 # ------------------------
 # Routes
 # ------------------------
-@app.get("/status")
-async def status():
-    return {"status": "ok", "message": "Live Debate backend is running 🚀"}
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    with open("frontend.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.post("/debate", response_model=DebateResponse)
 async def debate(request: DebateRequest):
     if not request.text.strip():
-        return JSONResponse(
-            status_code=400,
-            content={"error": "No text provided. Please send valid text."}
-        )
+        return JSONResponse(status_code=400, content={"error": "No text provided."})
 
     key_points = extract_key_points(request.text, request.max_points)
     debate_result = debate_on_points(key_points)
-
     return DebateResponse(key_points=key_points, debate=debate_result)
